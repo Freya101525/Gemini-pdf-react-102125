@@ -25,6 +25,7 @@ export interface ExecutionRecord {
 }
 
 export interface AgentConfig {
+  id: string; // Unique ID for each instance
   name: string;
   api: Provider;
   model: string;

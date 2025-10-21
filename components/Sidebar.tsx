@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ThemeName } from '../types';
 import { THEMES } from '../constants';
@@ -18,6 +17,7 @@ const ApiStatusIndicator: React.FC<{ name: string; isConnected: boolean }> = ({ 
 );
 
 const Sidebar: React.FC<SidebarProps> = ({ selectedTheme, onThemeChange }) => {
+    // FIX: Reverted to process.env.API_KEY to fix runtime error in the execution environment.
     const isGeminiConnected = !!process.env.API_KEY;
 
     return (
@@ -44,7 +44,8 @@ const Sidebar: React.FC<SidebarProps> = ({ selectedTheme, onThemeChange }) => {
                    <ApiStatusIndicator name="OpenAI" isConnected={false} />
                    <ApiStatusIndicator name="Grok" isConnected={false} />
                 </div>
-                 {!isGeminiConnected && <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">Set API_KEY environment variable to enable Gemini.</p>}
+                 {/* FIX: Updated message to be more generic and suitable for both live and deployed environments. */}
+                 {!isGeminiConnected && <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">Gemini API key not found. Ensure it's configured in environment secrets.</p>}
                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">OpenAI and Grok are not implemented in this version.</p>
             </div>
             

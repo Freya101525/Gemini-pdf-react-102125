@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import PdfProcessor from './components/PdfProcessor';
 import Orchestrator from './components/Orchestrator';
 import Dashboard from './components/Dashboard';
 import { ThemeName, ExecutionRecord } from './types';
-import { THEMES, DEFAULT_PDF_AGENTS } from './constants';
+import { THEMES } from './constants';
 
 type Tab = "PDF Processor" | "Orchestrator" | "Dashboard";
 
@@ -50,7 +49,8 @@ const App: React.FC = () => {
     const renderTabContent = () => {
         switch (activeTab) {
             case "PDF Processor":
-                return <PdfProcessor addExecutionRecord={addExecutionRecord} agents={DEFAULT_PDF_AGENTS} />;
+                // FIX: Removed unused 'agents' prop. The PdfProcessor component imports the default agents directly.
+                return <PdfProcessor addExecutionRecord={addExecutionRecord} />;
             case "Orchestrator":
                 return <Orchestrator addExecutionRecord={addExecutionRecord} />;
             case "Dashboard":

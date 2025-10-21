@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Theme, ThemeName, Provider, AgentConfig } from './types';
 
@@ -23,6 +22,8 @@ export const MODEL_OPTIONS: Record<Provider, string[]> = {
 
 export const DEFAULT_PDF_AGENTS: AgentConfig[] = [
     {
+        // FIX: Add missing 'id' property to satisfy the AgentConfig type.
+        id: "default-summarizer",
         name: "Document Summarizer",
         api: "Gemini",
         model: "gemini-2.5-flash",
@@ -30,6 +31,8 @@ export const DEFAULT_PDF_AGENTS: AgentConfig[] = [
         parameters: { temperature: 0.5, maxOutputTokens: 512 }
     },
     {
+        // FIX: Add missing 'id' property to satisfy the AgentConfig type.
+        id: "default-extractor",
         name: "Key Takeaways Extractor",
         api: "Gemini",
         model: "gemini-2.5-flash",
@@ -37,6 +40,8 @@ export const DEFAULT_PDF_AGENTS: AgentConfig[] = [
         parameters: { temperature: 0.7, maxOutputTokens: 1024 }
     },
     {
+        // FIX: Add missing 'id' property to satisfy the AgentConfig type.
+        id: "default-identifier",
         name: "Action Items Identifier",
         api: "Gemini",
         model: "gemini-2.5-pro",

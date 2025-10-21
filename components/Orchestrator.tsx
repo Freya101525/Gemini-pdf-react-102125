@@ -69,8 +69,12 @@ const Orchestrator: React.FC<OrchestratorProps> = ({ addExecutionRecord }) => {
     const [agents, setAgents] = useState<OrchestratorAgentConfig[]>([createDefaultAgent()]);
     const [enableChaining, setEnableChaining] = useState(true);
     const [initialInput, setInitialInput] = useState('');
-    const [isRunning, setIsRunning] = useState(false);
-    const [results, setResults] = useState<( { status: 'success' | 'error'; content: string } | null)[]>([]);
+
+    const [chainStatus, setChainStatus] = useState<'idle' | 'running' | 'paused' | 'finished' | 'error'>('idle');
+    const [currentAgentIndex, setCurrentAgentIndex] = useState(0);
+    const [executionResults, setExecutionResults] = useState<({ status: 'success' | 'error'; content: string })[]>([]);
+    const [nextInput, setNextInput] = useState('');
+    const [isEditingInput, setIsEditingInput] = useState(false);
 
     function createDefaultAgent(): OrchestratorAgentConfig {
         return {
@@ -87,53 +91,95 @@ const Orchestrator: React.FC<OrchestratorProps> = ({ addExecutionRecord }) => {
         while (newAgents.length < num) newAgents.push(createDefaultAgent());
         while (newAgents.length > num) newAgents.pop();
         setAgents(newAgents);
+        resetChain();
     };
 
     const updateAgent = (index: number, updatedAgent: OrchestratorAgentConfig) => {
         const newAgents = [...agents];
         newAgents[index] = updatedAgent;
         setAgents(newAgents);
+        resetChain();
     };
 
-    const executeChain = async () => {
-        if (!initialInput.trim()) {
-            alert('Please provide an initial input.');
+    const executeAgent = async (index: number, input: string) => {
+        if (index >= agents.length) {
+            setChainStatus('finished');
             return;
         }
-        setIsRunning(true);
-        setResults(new Array(agents.length).fill(null));
 
-        let currentInput = initialInput;
+        setChainStatus('running');
+        setIsEditingInput(false);
+        const agent = agents[index];
+        const startTime = performance.now();
 
-        for (let i = 0; i < agents.length; i++) {
-            const agent = agents[i];
-            const startTime = performance.now();
+        try {
+            if (agent.provider !== 'Gemini') throw new Error(`${agent.provider} is not implemented in this demo.`);
             
-            try {
-                 if (agent.provider !== 'Gemini') {
-                    throw new Error(`${agent.provider} is not implemented in this demo.`);
-                }
-                const fullPrompt = `${agent.system_prompt}\n\nUser Input:\n${currentInput}`;
-                const output = await executeGeminiQuery(
-                    fullPrompt, agent.model, agent.temperature, agent.top_p, agent.max_tokens
-                );
+            const fullPrompt = `${agent.system_prompt}\n\nUser Input:\n${input}`;
+            const output = await executeGeminiQuery(fullPrompt, agent.model, agent.temperature, agent.top_p, agent.max_tokens);
 
-                const duration = (performance.now() - startTime) / 1000;
-                addExecutionRecord({ agent: `Orchestrator Agent ${i + 1}`, provider: agent.provider, model: agent.model, status: 'success', duration_s: duration });
-                setResults(prev => { const next = [...prev]; next[i] = { status: 'success', content: output }; return next; });
-                
-                if (enableChaining) {
-                    currentInput = output;
-                }
-            } catch (error) {
-                const duration = (performance.now() - startTime) / 1000;
-                const message = error instanceof Error ? error.message : 'Unknown error';
-                addExecutionRecord({ agent: `Orchestrator Agent ${i + 1}`, provider: agent.provider, model: agent.model, status: 'error', duration_s: duration });
-                setResults(prev => { const next = [...prev]; next[i] = { status: 'error', content: message }; return next; });
-                if (enableChaining) break;
+            const duration = (performance.now() - startTime) / 1000;
+            addExecutionRecord({ agent: `Orchestrator Agent ${index + 1}`, provider: agent.provider, model: agent.model, status: 'success', duration_s: duration });
+
+            setExecutionResults(prev => {
+                const newResults = [...prev];
+                newResults[index] = { status: 'success', content: output };
+                return newResults;
+            });
+            
+            if (enableChaining && index < agents.length - 1) {
+                setNextInput(output);
+                setCurrentAgentIndex(index + 1);
+                setChainStatus('paused');
+            } else {
+                setChainStatus('finished');
             }
+        } catch (error) {
+            const duration = (performance.now() - startTime) / 1000;
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            addExecutionRecord({ agent: `Orchestrator Agent ${index + 1}`, provider: agent.provider, model: agent.model, status: 'error', duration_s: duration });
+            
+            setExecutionResults(prev => {
+                const newResults = [...prev];
+                newResults[index] = { status: 'error', content: message };
+                return newResults;
+            });
+            setChainStatus('error');
         }
-        setIsRunning(false);
+    };
+
+    const handleExecuteOrContinue = async () => {
+        if (chainStatus === 'idle' || chainStatus === 'finished' || chainStatus === 'error') {
+            if (!initialInput.trim()) {
+                alert('Please provide an initial input.');
+                return;
+            }
+            setCurrentAgentIndex(0);
+            setExecutionResults([]);
+            setNextInput(initialInput);
+            setIsEditingInput(false);
+            await executeAgent(0, initialInput);
+        } else if (chainStatus === 'paused') {
+            await executeAgent(currentAgentIndex, nextInput);
+        }
+    };
+    
+    const resetChain = () => {
+        setChainStatus('idle');
+        setCurrentAgentIndex(0);
+        setExecutionResults([]);
+        setNextInput('');
+        setIsEditingInput(false);
+    };
+
+    const getButtonText = () => {
+        switch(chainStatus) {
+            case 'idle': return '▶️ Execute Agent Chain';
+            case 'running': return 'Executing...';
+            case 'paused': return `▶️ Continue to Agent ${currentAgentIndex + 1}`;
+            case 'finished': return '🎉 Run Again';
+            case 'error': return '🔁 Retry Chain';
+        }
     };
 
     return (
@@ -161,25 +207,61 @@ const Orchestrator: React.FC<OrchestratorProps> = ({ addExecutionRecord }) => {
                 <textarea value={initialInput} onChange={(e) => setInitialInput(e.target.value)} className="w-full p-2 border rounded h-32 dark:bg-gray-700 dark:border-gray-600" placeholder="Enter the starting input for the agent chain..." />
             </Card>
 
-            <button
-                onClick={executeChain}
-                disabled={isRunning}
-                className="w-full py-3 px-4 text-white font-semibold rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-transform duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: `linear-gradient(90deg, var(--primary-color), var(--secondary-color))`, transform: isRunning ? 'scale(0.98)' : 'scale(1)' }}
-            >
-                {isRunning ? 'Executing Chain...' : '▶️ Execute Agent Chain'}
-            </button>
+            <div className="flex items-center space-x-4">
+                <button
+                    onClick={handleExecuteOrContinue}
+                    disabled={chainStatus === 'running'}
+                    className="flex-grow py-3 px-4 text-white font-semibold rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-transform duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: `linear-gradient(90deg, var(--primary-color), var(--secondary-color))`, transform: chainStatus === 'running' ? 'scale(0.98)' : 'scale(1)' }}
+                >
+                    {getButtonText()}
+                </button>
+                {chainStatus !== 'idle' && (
+                    <button onClick={resetChain} className="py-3 px-4 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100 font-semibold rounded-lg shadow-md hover:bg-gray-300 dark:hover:bg-gray-500">
+                        Stop & Reset
+                    </button>
+                )}
+            </div>
 
-            {results.some(r => r) && (
+            {executionResults.length > 0 && (
                 <Card>
                     <h3 className="text-xl font-semibold mb-4">📊 Execution Results</h3>
                     <div className="space-y-4">
-                        {results.map((result, i) => result && (
-                            <div key={i} className={`p-4 border rounded-lg ${result.status === 'success' ? 'border-green-500' : 'border-red-500'}`}>
+                        {executionResults.map((result, i) => result && (
+                            <div key={i} className={`p-4 border rounded-lg ${result.status === 'success' ? 'border-green-500 bg-green-50/50 dark:bg-green-900/20' : 'border-red-500 bg-red-50/50 dark:bg-red-900/20'}`}>
                                 <h4 className="font-semibold">Agent {i + 1} Output</h4>
                                 <p className="mt-2 text-sm whitespace-pre-wrap">{result.content}</p>
                             </div>
                         ))}
+                        {chainStatus === 'paused' && enableChaining && (
+                            <Card className="!border-l-blue-500">
+                                <h3 className="text-lg font-semibold mb-2">
+                                    📥 Input for Agent {currentAgentIndex + 1}
+                                </h3>
+                                <div className="flex items-center mb-2">
+                                    <input 
+                                        type="checkbox" 
+                                        id={`edit-checkbox-${currentAgentIndex}`} 
+                                        checked={isEditingInput} 
+                                        onChange={e => setIsEditingInput(e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-2"
+                                    />
+                                    <label htmlFor={`edit-checkbox-${currentAgentIndex}`} className="text-sm font-medium">Edit Input</label>
+                                </div>
+                                
+                                {isEditingInput ? (
+                                    <textarea 
+                                        value={nextInput} 
+                                        onChange={(e) => setNextInput(e.target.value)} 
+                                        className="w-full p-2 border rounded h-32 dark:bg-gray-700 dark:border-gray-600" 
+                                    />
+                                ) : (
+                                     <p className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-md max-h-48 overflow-y-auto">
+                                        {nextInput}
+                                    </p>
+                                )}
+                            </Card>
+                        )}
                     </div>
                 </Card>
             )}
