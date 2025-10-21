@@ -1,0 +1,5 @@
+{
+  "name": "Agentic PDF & Prompt Orchestrator",
+  "description": "An interactive web application to process PDF documents and orchestrate chained AI agent workflows using various language models. Features a live dashboard for monitoring and analyzing execution data.",
+  "requestFramePermissions": []
+}
